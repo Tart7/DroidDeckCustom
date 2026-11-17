@@ -1,0 +1,170 @@
+name: Sync upstream and build
+
+# Keeps the custom-store fork current with DroidDeck and publishes a signed APK.
+# If the rebase hits a conflict it stops, keeps the branch untouched, and opens an issue —
+# so a broken auto-merge never ships a bad build.
+
+on:
+  schedule:
+    - cron: '0 3 * * *'      # daily, 03:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+
+env:
+  UPSTREAM: Droid-Deck/DroidDeck
+  BRANCH: custom-store
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    outputs:
+      pushed: ${{ steps.push.outputs.pushed || steps.nopush.outputs.pushed }}
+      upstream: ${{ steps.fetch.outputs.new }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name  "custom-store bot"
+          git config user.email "bot@users.noreply.github.com"
+          git remote add upstream "https://github.com/${UPSTREAM}.git"
+
+      - name: Fetch upstream
+        id: fetch
+        run: |
+          git fetch upstream main
+          NEW=$(git rev-parse upstream/main)
+          OLD=$(git rev-parse HEAD)
+          echo "new=$NEW" >> "$GITHUB_OUTPUT"
+          if git merge-base --is-ancestor "$NEW" "$OLD"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Rebase replays only our 14 lines of upstream edits on top of the new head.
+      # --empty=drop discards our commits that upstream already absorbed.
+      - name: Rebase onto upstream
+        id: rebase
+        if: steps.fetch.outputs.changed == 'true'
+        run: |
+          if git rebase --empty=drop upstream/main; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            git rebase --abort || true
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            git diff --name-only --diff-filter=U > /tmp/conflicts.txt || true
+          fi
+
+      - name: Report conflict
+        if: steps.rebase.outputs.ok == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const files = fs.existsSync('/tmp/conflicts.txt')
+              ? fs.readFileSync('/tmp/conflicts.txt', 'utf8').trim()
+              : '(unknown)';
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Upstream sync conflict — ${new Date().toISOString().slice(0,10)}`,
+              body: [
+                `Upstream \`${{ env.UPSTREAM }}\` moved to \`${{ steps.fetch.outputs.new }}\`.`,
+                '',
+                'The rebase could not be applied automatically. The branch was left untouched.',
+                '',
+                'Conflicting files:',
+                '```',
+                files || '(none reported)',
+                '```',
+                '',
+                'Resolve locally with:',
+                '```bash',
+                'git fetch upstream main',
+                'git rebase upstream/main',
+                '# fix the marked hunks, then:',
+                'git rebase --continue',
+                '```',
+                'The conflicts should be small — our footprint is ~14 lines.',
+              ].join('\n'),
+              labels: ['upstream-sync'],
+            });
+
+      - name: Push rebased branch
+        id: push
+        if: steps.rebase.outputs.ok == 'true'
+        run: |
+          git push --force-with-lease origin HEAD:${BRANCH}
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Nothing to push
+        id: nopush
+        if: steps.rebase.outputs.ok != 'true' || steps.fetch.outputs.changed != 'true'
+        run: echo "pushed=false" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: sync
+    if: needs.sync.outputs.pushed == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH }}
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # The project pins NDK 27.3 and CMake 3.22.1; installing them explicitly keeps the
+      # build reproducible instead of depending on whatever the runner image happens to have.
+      - name: Install Android NDK and CMake
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "ndk;27.3.13750724" "cmake;3.22.1" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Build
+        run: ./gradlew :app:assembleRelease --no-daemon
+
+      - name: Sign
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.KEY_PASS }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then echo "no keystore secret; skipping signing"; exit 0; fi
+          echo "$KEYSTORE_B64" | base64 -d > /tmp/release.p12
+          APK=$(find app/build/outputs/apk/release -name '*.apk' | head -1)
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+          "$BUILD_TOOLS/zipalign" -f -p 4 "$APK" /tmp/aligned.apk
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks /tmp/release.p12 --ks-type PKCS12 \
+            --ks-pass "pass:$KEYSTORE_PASS" \
+            --ks-key-alias "$KEY_ALIAS" --key-pass "pass:$KEY_PASS" \
+            --out /tmp/signed.apk /tmp/aligned.apk
+
+      - name: Publish release
+        if: hashFiles('/tmp/signed.apk') != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: DroidDeck custom-store ${{ github.run_number }}
+          files: /tmp/signed.apk
+          body: |
+            Auto-built from `${{ env.BRANCH }}` after syncing upstream.
+            Upstream head: `${{ needs.sync.outputs.upstream }}`

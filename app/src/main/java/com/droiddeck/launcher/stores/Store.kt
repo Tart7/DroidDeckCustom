@@ -1,6 +1,12 @@
 package com.droiddeck.launcher.stores
 
 enum class Store(val id: String, val label: String, val shortLabel: String) {
+    /**
+     * Custom-store fork only. Kept first on purpose: upstream appends new stores at the
+     * end of this list, so anchoring here keeps the auto-rebase conflict-free.
+     */
+    STEAMRIP("steamrip", "SteamRip", "SteamRip"),
+
     GOG("gog", "GOG", "GOG"),
     EPIC("epic", "Epic Games", "Epic"),
     AMAZON("amazon", "Amazon Games", "Amazon"),

@@ -1143,6 +1143,8 @@ internal fun storePalette(base: Palette, store: Store?): Palette {
         Store.EA -> Color(0xFFFF4747) to Color(0xFFE03030)
         Store.ROCKSTAR -> Color(0xFFFCAF17) to Color(0xFFD98E00)
         null -> return base
+        // Custom-store fork: any store without an explicit colour uses the base palette.
+        else -> return base
     }
     val on = if (accent.luminance() > 0.18f) Color(0xFF0B0B0D) else Color.White
     return Palette(
