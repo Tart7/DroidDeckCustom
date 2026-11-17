@@ -19,6 +19,7 @@ import com.droiddeck.launcher.stores.download.DownloadQueue
  */
 object CustomStoreBackend : StoreBackend {
 
+
     override val store: Store = Store.STEAMRIP
 
     private val site: CustomStoreSite = SteamRipSite
