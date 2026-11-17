@@ -58,14 +58,19 @@ object SteamRipSite : CustomStoreSite {
 
         // Direct archives that are not patch files come first; host landing pages
         // (Gofile/BZZHR) need a second hop this build does not implement yet.
-        val primary = SteamRipParser.pickPrimary(sources)
-        if (primary == null) {
-            log("steamrip: no usable mirror")
-            return null
+        // Try the mirrors in order of usefulness: a full direct archive first, then
+        // anything else that might work. Patch-only entries are skipped by pickPrimary.
+        for (source in sources.filter { !it.updateOnly }) {
+            when (val r = MirrorResolver.resolve(context, source, log)) {
+                is MirrorResolver.Result.Direct -> {
+                    log("steamrip: using ${source.host} direct link")
+                    return r.url
+                }
+                is MirrorResolver.Result.NeedsBrowser -> log("steamrip: ${source.host} -> ${r.reason}")
+                is MirrorResolver.Result.Failed -> log("steamrip: ${source.host} failed: ${r.reason}")
+            }
         }
-        if (!primary.direct) {
-            log("steamrip: only indirect mirrors (${primary.host}) — unsupported for now")
-        }
-        return primary.url
+        log("steamrip: no mirror could be resolved automatically")
+        return null
     }
 }

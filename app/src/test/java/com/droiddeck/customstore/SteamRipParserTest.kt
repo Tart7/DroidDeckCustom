@@ -166,4 +166,37 @@ class SteamRipParserTest {
             assertTrue("not absolute: ${it.url}", it.url.startsWith("https://"))
         }
     }
+
+    @Test
+    fun `mirror classification matches host behaviour`() {
+        val sources = SteamRipParser.parseSources(sourceSample)
+
+        val fileditch = sources.first { it.host.equals("Fileditch", true) && !it.updateOnly }
+        assertTrue("fileditch should be direct", fileditch.direct)
+
+        val gofile = sources.first { it.url.contains("gofile") }
+        assertTrue("gofile should not be direct", !gofile.direct)
+
+        val bzzhr = sources.first { it.url.contains("bzzhr") }
+        assertTrue("bzzhr should not be direct", !bzzhr.direct)
+    }
+
+    @Test
+    fun `update-only patch is never picked as primary`() {
+        // Even if the patch happens to come first in the page, it must not win.
+        val patchFirst = """
+            <p>FileDitch <a href="//itsfileditchfiles.st/x/Game-Update-Only-v1.rar">DOWNLOAD HERE</a></p>
+            <p>Fileditch <a href="//itsfileditchfiles.st/x/Game-SteamRIP.com.rar">DOWNLOAD HERE</a></p>
+        """.trimIndent()
+
+        val sources = SteamRipParser.parseSources(patchFirst)
+        assertEquals(2, sources.size)
+
+        val primary = SteamRipParser.pickPrimary(sources)
+        assertTrue("picked the patch", primary != null && !primary!!.updateOnly)
+        assertTrue(
+            "wrong archive: ${primary!!.url}",
+            primary.url.contains("Game-SteamRIP.com.rar"),
+        )
+    }
 }
