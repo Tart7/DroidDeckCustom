@@ -51,8 +51,21 @@ object SteamRipSite : CustomStoreSite {
         context: Context, item: CatalogItem, log: (String) -> Unit,
     ): String? {
         val html = CustomFetch.html(context, item.storeUrl, log) ?: return null
-        val links = SteamRipParser.parseArchiveLinks(html)
-        log("steamrip: ${links.size} archive link(s) on ${item.title}")
-        return links.firstOrNull()
+
+        val sources = SteamRipParser.parseSources(html)
+        log("steamrip: ${sources.size} mirror(s) on ${item.title}")
+        sources.forEach { log("  ${it.host} direct=${it.direct} patch=${it.updateOnly}") }
+
+        // Direct archives that are not patch files come first; host landing pages
+        // (Gofile/BZZHR) need a second hop this build does not implement yet.
+        val primary = SteamRipParser.pickPrimary(sources)
+        if (primary == null) {
+            log("steamrip: no usable mirror")
+            return null
+        }
+        if (!primary.direct) {
+            log("steamrip: only indirect mirrors (${primary.host}) — unsupported for now")
+        }
+        return primary.url
     }
 }

@@ -60,31 +60,28 @@ class SteamRipParserTest {
 
     @Test
     fun `archive link from a real game page`() {
-        // Captured verbatim from steamrip.com/dice-hoarder-free-download/
-        val page = """
-            <div class="entry-content">
-              <h2>Dice Hoarder Direct Download</h2>
-              <a class="btn" href="//itsfileditchfiles.st/balpha48/2af58fa8b1596bbcdb51/Dice.Hoarder-SteamRIP.com.rar">Download</a>
-            </div>
-        """.trimIndent()
+        // Mirror rows on the real page are <p> blocks: "<p>Fileditch<br>
+        // <a href=\"//...\">DOWNLOAD HERE</a></p>".
+        val page = """<p style="text-align: center;"><span><strong>Fileditch</strong></span><br> <a href="//itsfileditchfiles.st/balpha48/2af58fa8b1596bbcdb51/Dice.Hoarder-SteamRIP.com.rar" target="_blank" rel="nofollow">DOWNLOAD HERE</a> </p>"""
 
-        val links = SteamRipParser.parseArchiveLinks(page)
-        assertEquals(1, links.size)
+        val sources = SteamRipParser.parseSources(page)
+        assertEquals(1, sources.size)
         assertEquals(
             "https://itsfileditchfiles.st/balpha48/2af58fa8b1596bbcdb51/Dice.Hoarder-SteamRIP.com.rar",
-            links.first(),
+            sources.first().url,
         )
+        assertTrue("should be a direct archive", sources.first().direct)
     }
 
     @Test
     fun `protocol-relative archive link resolves to https`() {
-        val html = """<a href="//itsfileditchfiles.st/x/Dice.Hoarder-SteamRIP.com.rar">dl</a>"""
-        val links = SteamRipParser.parseArchiveLinks(html)
+        val html = """<p>Fileditch <a href="//itsfileditchfiles.st/x/Dice.Hoarder-SteamRIP.com.rar">DOWNLOAD HERE</a></p>"""
+        val sources = SteamRipParser.parseSources(html)
 
-        assertEquals(1, links.size)
+        assertEquals(1, sources.size)
         assertEquals(
             "https://itsfileditchfiles.st/x/Dice.Hoarder-SteamRIP.com.rar",
-            links.first(),
+            sources.first().url,
         )
     }
 
@@ -99,5 +96,74 @@ class SteamRipParserTest {
     @Test
     fun `cloudflare page yields nothing`() {
         assertTrue(SteamRipParser.parseListing("<html><title>Just a moment...</title></html>").isEmpty())
+    }
+
+    // ---------------------------------------------------------------- mirrors
+
+    private val sourceSample: String by lazy {
+        javaClass.classLoader!!.getResourceAsStream("steamrip-sources.html")!!
+            .bufferedReader().readText()
+    }
+
+    @Test
+    fun `finds every mirror on the forza page`() {
+        val sources = SteamRipParser.parseSources(sourceSample)
+
+        assertEquals("expected 4 mirrors", 4, sources.size)
+        sources.forEach { println("  ${it.host} | direct=${it.direct} updateOnly=${it.updateOnly} | ${it.url}") }
+
+        assertEquals(listOf("GOFILE", "BZZHR", "Fileditch", "Fileditch"), sources.map { it.host }.let {
+            // The page writes the fourth one as "FileDitch"; host text is lowercased by text()
+            it.map { h -> if (h.equals("FileDitch", true)) "Fileditch" else h }
+        })
+    }
+
+    @Test
+    fun `gofile and bzzhr are indirect`() {
+        val sources = SteamRipParser.parseSources(sourceSample)
+        val gofile = sources.first { it.url.contains("gofile") }
+        val bzzhr = sources.first { it.url.contains("bzzhr") }
+
+        assertTrue("gofile should need a second hop", !gofile.direct)
+        assertTrue("bzzhr should need a second hop", !bzzhr.direct)
+    }
+
+    @Test
+    fun `fileditch archives are direct`() {
+        val direct = SteamRipParser.parseSources(sourceSample).filter { it.host.equals("Fileditch", true) }
+
+        assertEquals(2, direct.size)
+        assertTrue("fileditch should be direct", direct.all { it.direct })
+    }
+
+    @Test
+    fun `update-only patch is flagged`() {
+        val sources = SteamRipParser.parseSources(sourceSample)
+
+        assertEquals("exactly one update patch", 1, sources.count { it.updateOnly })
+        assertTrue(
+            "the patch should be the Update-Only one",
+            sources.first { it.updateOnly }.url.contains("Update-Only"),
+        )
+    }
+
+    @Test
+    fun `primary mirror is the full game not the patch`() {
+        val primary = SteamRipParser.pickPrimary(SteamRipParser.parseSources(sourceSample))
+
+        assertTrue("no primary picked", primary != null)
+        assertTrue("picked the patch", !primary!!.updateOnly)
+        assertTrue("primary should be direct", primary.direct)
+        assertTrue(
+            "primary is the wrong archive: ${primary.url}",
+            primary.url.contains("Forza.Horizon.6-SteamRIP.com.rar"),
+        )
+    }
+
+    @Test
+    fun `protocol-relative mirrors become https`() {
+        SteamRipParser.parseSources(sourceSample).forEach {
+            assertTrue("not absolute: ${it.url}", it.url.startsWith("https://"))
+        }
     }
 }

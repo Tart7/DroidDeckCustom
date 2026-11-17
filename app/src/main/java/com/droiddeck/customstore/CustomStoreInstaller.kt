@@ -81,6 +81,8 @@ class CustomStoreInstaller(
         conn.readTimeout = 60_000
         conn.instanceFollowRedirects = true
         conn.setRequestProperty("User-Agent", CustomFetch.UA)
+        // Fileditch/itsfileditchfiles returns 302 -> homepage without a site Referer.
+        conn.setRequestProperty("Referer", SteamRipSite.BASE + "/")
         val total = conn.contentLengthLong.takeIf { it > 0 } ?: -1L
         var done = 0L
         val buf = ByteArray(128 * 1024)

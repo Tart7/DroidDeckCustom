@@ -83,3 +83,29 @@ git submodule update --init --recursive
 | `KEY_PASS` | key 密码 |
 
 不配置也能编译，只是不签名。
+
+## SteamRip：多个下载来源
+
+每个游戏页会列出多个镜像，各自一个 `<p>` 块：
+
+```html
+<p>GOFILE    <a href="//gofile.io/d/zjXxxtgg">DOWNLOAD HERE</a></p>
+<p>BZZHR     <a href="//bzzhr.to/9u6s7gee0dyb">DOWNLOAD HERE</a></p>
+<p>Fileditch <a href="//itsfileditchfiles.st/…/Forza.Horizon.6-SteamRIP.com.rar">DOWNLOAD HERE</a></p>
+<p>FileDitch <a href="//itsfileditchfiles.st/…/FH6-Update-Only-v483.970….rar">DOWNLOAD HERE</a></p>
+```
+
+| 来源 | 类型 | 处理 |
+|---|---|---|
+| Fileditch | **直链 `.rar`** | 直接用 |
+| FileDitch（第二个） | **直链，但只是补丁** | **必须跳过** |
+| Gofile | 落地页，需 Gofile API + accountToken | 未实现 |
+| BZZHR | 落地页，需过 Turnstile | 未实现 |
+
+关键点：
+
+1. **同一页面常有两个 Fileditch 条目，第二个是 `Update-Only` 补丁**。只取第一个直链会装成 40MB 的差分包而不是游戏。`pickPrimary()` 会排除 `updateOnly`。
+2. **Fileditch 必须带 `Referer: https://steamrip.com/`**，否则 302 回首页。
+3. Gofile 用 cookie 里的 `accountToken` 认证；BZZHR 是 Turnstile，需要真实手势。这两个目前返回它们的落地页 URL，未做二次解析。
+
+解析逻辑在 `SteamRipParser.parseSources()`，用真实抓取的 HTML 做过测试。
