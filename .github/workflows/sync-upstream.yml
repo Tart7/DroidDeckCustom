@@ -205,6 +205,14 @@ jobs:
       - name: Build the add-on packs
         run: bash tools/packs/build.sh app/build/packs
 
+      # The store download engines are a Rust crate built through cargo-ndk.
+      - name: Install cargo-ndk
+        run: |
+          set -euo pipefail
+          command -v cargo >/dev/null || rustup default stable
+          command -v cargo-ndk >/dev/null || cargo install cargo-ndk --locked
+          cargo ndk --version
+
       - name: Point Gradle at the SDK
         run: echo "sdk.dir=$ANDROID_HOME" > local.properties
 
