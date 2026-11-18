@@ -210,6 +210,9 @@ jobs:
         run: |
           set -euo pipefail
           command -v cargo >/dev/null || rustup default stable
+          # The store engines cross-compile to arm64 Android; without this target the
+          # crate cannot link against core.
+          rustup target add aarch64-linux-android
           command -v cargo-ndk >/dev/null || cargo install cargo-ndk --locked
           cargo ndk --version
 
