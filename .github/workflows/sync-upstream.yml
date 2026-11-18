@@ -94,6 +94,14 @@ jobs:
         if: steps.rebase.outputs.ok == 'true'
         run: |
           set -euo pipefail
+          # GITHUB_TOKEN may not push changes under .github/workflows/. Upstream touches
+          # its own workflows often, so drop those hunks: this fork runs exactly one
+          # workflow and does not need upstream's CI definitions to stay in sync.
+          if ! git diff --quiet origin/custom-store HEAD -- .github/workflows; then
+            echo "::notice::workflow files changed upstream; keeping ours"
+            git checkout origin/custom-store -- .github/workflows
+            git commit -q -m "ci: keep this fork's workflows when syncing upstream" || true
+          fi
           git push --force-with-lease origin HEAD:custom-store
           echo "pushed=true" >> "$GITHUB_OUTPUT"
 
