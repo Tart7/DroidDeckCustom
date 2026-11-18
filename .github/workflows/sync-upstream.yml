@@ -221,6 +221,25 @@ jobs:
 
       # Records hashes of the prepared runtime assets; verifyRuntimeInputs refuses to
       # build without this manifest.
+      # Optional graphics assets the runtime manifest still expects to exist.
+      - name: Build the Turnip driver bundles
+        run: python3 tools/quest/build-driver.py "$ANDROID_HOME/ndk/27.3.13750724"
+
+      - name: Build the Xclipse Vulkan layer
+        run: |
+          set -euo pipefail
+          D=app/src/main/assets/linuxfs
+          mkdir -p "$D/usr/local/lib/droiddeck-xclipse"
+          aarch64-linux-gnu-gcc -shared -fPIC -O2 -w -fvisibility=hidden -pthread \
+            -o "$D/usr/local/lib/droiddeck-xclipse/libVkLayer_droiddeck_xclipse.so" \
+            tools/linuxfs/xclipse-layer/xclipse_layer.c -ldl || true
+          if [ -f "$D/usr/local/lib/droiddeck-xclipse/libVkLayer_droiddeck_xclipse.so" ]; then
+            aarch64-linux-gnu-strip --strip-unneeded \
+              "$D/usr/local/lib/droiddeck-xclipse/libVkLayer_droiddeck_xclipse.so"
+            install -m644 tools/linuxfs/xclipse-layer/VkLayer_droiddeck_xclipse.json \
+              "$D/usr/local/lib/droiddeck-xclipse/"
+          fi
+
       - name: Record runtime inputs
         run: python3 tools/release/runtime_inputs.py record
 
