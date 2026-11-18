@@ -142,6 +142,12 @@ jobs:
       - name: Bundle esync packs
         run: python3 tools/components/prepare.py esync
 
+      - name: Fetch DirectAudio
+        run: python3 tools/components/prepare.py directaudio
+
+      - name: Build the AAudio sink
+        run: python3 tools/components/prepare.py audio
+
       - name: Fetch PowerVR pack input
         run: python3 tools/powervr/fetch.py
 
