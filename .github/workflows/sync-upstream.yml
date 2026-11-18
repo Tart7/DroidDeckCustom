@@ -151,24 +151,9 @@ jobs:
       - name: Build the AAudio sink
         run: python3 tools/components/prepare.py audio
 
-      # aarch64 cross toolchain: the Rust helpers (comet/xbox) link against it, and the
-      # Xclipse Vulkan layer is compiled with it.
+      # aarch64 cross toolchain: the Rust helpers (comet) link against it.
       - name: Install aarch64 cross toolchain
         run: bash tools/ci/install-ubuntu-packages.sh gcc-aarch64-linux-gnu libvulkan-dev
-
-      - name: Build the Xclipse Vulkan layer
-        run: |
-          set -euo pipefail
-          D=app/src/main/assets/linuxfs
-          mkdir -p "$D/usr/local/bin" "$D/usr/local/lib/droiddeck-xclipse"
-          aarch64-linux-gnu-gcc -shared -fPIC -O2 -Wall -Wextra -Wno-unused-parameter \
-            -fvisibility=hidden -pthread \
-            -o "$D/usr/local/lib/droiddeck-xclipse/libVkLayer_droiddeck_xclipse.so" \
-            tools/linuxfs/xclipse-layer/xclipse_layer.c -ldl
-          aarch64-linux-gnu-strip --strip-unneeded \
-            "$D/usr/local/lib/droiddeck-xclipse/libVkLayer_droiddeck_xclipse.so"
-          install -m644 tools/linuxfs/xclipse-layer/VkLayer_droiddeck_xclipse.json \
-            "$D/usr/local/lib/droiddeck-xclipse/"
 
       - name: Build the GOG comet helper
         run: python3 tools/components/prepare.py comet
