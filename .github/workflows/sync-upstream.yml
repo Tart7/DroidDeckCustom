@@ -179,6 +179,23 @@ jobs:
           cp -a /tmp/xbox/. "$DEST"/
           ls -la "$DEST" | head
 
+      # Windows-side helpers the packs ship. Cross-compiled with mingw, same as upstream.
+      - name: Build the Ubisoft launcher service
+        run: |
+          set -euo pipefail
+          command -v x86_64-w64-mingw32-gcc >/dev/null || {
+            sudo apt-get update -qq && sudo apt-get install -y -qq gcc-mingw-w64-x86-64
+          }
+          bash tools/ubisoft-launcher/build.sh
+
+      - name: Build the Rockstar launcher services
+        run: |
+          set -euo pipefail
+          command -v i686-w64-mingw32-gcc >/dev/null || {
+            sudo apt-get update -qq && sudo apt-get install -y -qq gcc-mingw-w64-i686
+          }
+          bash tools/rockstar-launcher/build.sh
+
       - name: Fetch PowerVR pack input
         run: python3 tools/powervr/fetch.py
 
