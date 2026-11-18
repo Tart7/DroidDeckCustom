@@ -196,6 +196,9 @@ jobs:
           }
           bash tools/rockstar-launcher/build.sh
 
+      - name: Build the Dirt ws2_32 shim
+        run: python3 tools/components/prepare.py dirt-ws2
+
       - name: Fetch PowerVR pack input
         run: python3 tools/powervr/fetch.py
 
