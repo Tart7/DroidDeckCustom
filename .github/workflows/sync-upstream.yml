@@ -151,12 +151,26 @@ jobs:
       - name: Build the AAudio sink
         run: python3 tools/components/prepare.py audio
 
-      # The Xbox helper is a Rust ARM64 build the host expects at a fixed path. It is an
-      # optional feature (Xbox cloud), but the pack step refuses to run without it.
-      - name: Build the Xbox backend
+      # The Xbox helper is an ARM64 Rust build the pack step insists on. It has nothing to
+      # do with the custom store, and building it needs an ARM runner, so pull the binary
+      # upstream already publishes instead of rebuilding it.
+      - name: Fetch the Xbox backend from upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          rustup toolchain install 1.99.0 --profile minimal || true
-          python3 tools/components/prepare.py xbox
+          set -euo pipefail
+          DEST=app/src/main/assets/linuxfs/usr/local/lib/droiddeck-xbox
+          mkdir -p "$DEST"
+          ID=$(gh api "repos/Droid-Deck/DroidDeck/actions/artifacts?name=xbox-arm64&per_page=20" \
+                --jq '[.artifacts[] | select(.expired==false)][0].id')
+          if [ -z "$ID" ] || [ "$ID" = "null" ]; then
+            echo "::error::no upstream xbox-arm64 artifact available"
+            exit 1
+          fi
+          gh api "repos/Droid-Deck/DroidDeck/actions/artifacts/$ID/zip" > /tmp/xbox.zip
+          unzip -q -o /tmp/xbox.zip -d /tmp/xbox
+          cp -a /tmp/xbox/. "$DEST"/
+          ls -la "$DEST" | head
 
       - name: Fetch PowerVR pack input
         run: python3 tools/powervr/fetch.py
