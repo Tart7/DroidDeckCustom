@@ -163,6 +163,14 @@ jobs:
       # Everything else (GPU driver bundles, Xbox/Ubisoft/Rockstar helpers, ffmpeg-style
       # extras) is optional at runtime. Leaving them out keeps their BuildConfig sha empty,
       # which makes AddonPack report them unavailable instead of failing a download.
+      # The store download engines are a Rust crate; cargo-ndk drives the cross-compile.
+      - name: Install cargo-ndk
+        run: |
+          set -euo pipefail
+          command -v cargo >/dev/null || rustup default stable
+          rustup target add aarch64-linux-android
+          command -v cargo-ndk >/dev/null || cargo install cargo-ndk --locked
+
       - name: Tell Gradle which packs we have
         run: echo "sdk.dir=$ANDROID_HOME" > local.properties
 
