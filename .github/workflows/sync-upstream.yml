@@ -185,6 +185,9 @@ jobs:
       - name: Build the add-on packs
         run: bash tools/packs/build.sh app/build/packs
 
+      - name: Point Gradle at the SDK
+        run: echo "sdk.dir=$ANDROID_HOME" > local.properties
+
       - name: Build APK
         run: ./gradlew :app:assembleRelease --no-daemon
 
