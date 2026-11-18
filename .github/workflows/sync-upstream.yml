@@ -134,9 +134,13 @@ jobs:
       # Native components upstream builds before packaging. Without proot the pack
       # step fails on a missing libproot.so, so this order matters.
       - name: Prepare Linux build tools
-        env:
-          COMPONENTS_TO_BUILD: "runtime arm64-preloads vkbridge"
         run: python3 tools/components/prepare.py tools
+
+      - name: Build ARM64 preloads
+        run: python3 tools/components/prepare.py arm64-preloads
+
+      - name: Build x86 preloads
+        run: python3 tools/components/prepare.py x86-preloads
 
       - name: Build remaining runtime assets
         run: python3 tools/components/prepare.py runtime
