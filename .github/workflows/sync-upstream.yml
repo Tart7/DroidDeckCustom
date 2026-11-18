@@ -123,6 +123,25 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
             "ndk;27.3.13750724" "cmake;3.22.1" "platforms;android-35" "build-tools;35.0.0"
 
+      # Native components upstream builds before packaging. Without proot the pack
+      # step fails on a missing libproot.so, so this order matters.
+      - name: Prepare Linux build tools
+        env:
+          COMPONENTS_TO_BUILD: "runtime arm64-preloads vkbridge"
+        run: python3 tools/components/prepare.py tools
+
+      - name: Build remaining runtime assets
+        run: python3 tools/components/prepare.py runtime
+
+      - name: Build Mali bridge
+        run: python3 tools/components/prepare.py vkbridge
+
+      - name: Build proot
+        run: python3 tools/components/prepare.py proot
+
+      - name: Bundle esync packs
+        run: python3 tools/components/prepare.py esync
+
       - name: Fetch PowerVR pack input
         run: python3 tools/powervr/fetch.py
 
