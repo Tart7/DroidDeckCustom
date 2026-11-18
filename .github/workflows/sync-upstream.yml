@@ -22,7 +22,7 @@ permissions:
 jobs:
   sync:
     name: Sync with upstream
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       pushed: ${{ steps.pushing.outputs.pushed }}
     steps:
@@ -113,7 +113,9 @@ jobs:
     name: Build APK
     needs: sync
     if: needs.sync.outputs.pushed == 'true' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    # Pinned deliberately: ubuntu-26 ships gcc 15, whose
+    # -Werror=unterminated-string-initialization rejects upstream's gosys magic strings.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
