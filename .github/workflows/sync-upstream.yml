@@ -151,6 +151,13 @@ jobs:
       - name: Build the AAudio sink
         run: python3 tools/components/prepare.py audio
 
+      # The Xbox helper is a Rust ARM64 build the host expects at a fixed path. It is an
+      # optional feature (Xbox cloud), but the pack step refuses to run without it.
+      - name: Build the Xbox backend
+        run: |
+          rustup toolchain install 1.99.0 --profile minimal || true
+          python3 tools/components/prepare.py xbox
+
       - name: Fetch PowerVR pack input
         run: python3 tools/powervr/fetch.py
 
